@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Regras — Dominó Lógico</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #f4f6f8;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        header h1 { margin: 0; font-size: 35px; }
+
+        main {
+            max-width: 900px;
+            margin: auto;
+            padding: 40px 20px;
+        }
+
+        .container-regras {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+        }
+
+        h2 { color: #2563eb; border-bottom: 2px solid #e5edff; padding-bottom: 10px; }
+
+        .passo {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 25px;
+            gap: 20px;
+        }
+
+        .numero {
+            background: #1e293b;
+            color: white;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .texto-passo strong { color: #1e3a8a; }
+
+        .alerta {
+            background: #fffbeb;
+            border-left: 5px solid #f59e0b;
+            padding: 15px;
+            margin: 20px 0;
+            font-size: 15px;
+        }
+
+        .btn-voltar {
+            display: inline-block;
+            margin-top: 30px;
+            padding: 12px 25px;
+            background: #2563eb;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+
+        .btn-voltar:hover { background: #1d4ed8; }
+
+        footer {
+            background: #1e293b;
+            color: #cbd5f5;
+            padding: 20px;
+            text-align: center;
+            margin-top: 50px;
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>Guia do Dominó Lógico</h1>
+    <p>Aprenda a jogar e colabore com a sua dupla</p>
+</header>
+
+<main>
+    <div class="container-regras">
+        <h2>Como Jogar?</h2>
+
+        <div class="passo">
+            <div class="numero">1</div>
+            <div class="texto-passo">
+                <strong>Entrar na Sala:</strong> Digite o seu nome e o número da sala combinado com o professor. Se a sala não existir, ela será criada na hora.
+            </div>
+        </div>
+
+        <div class="passo">
+            <div class="numero">2</div>
+            <div class="texto-passo">
+                <strong>Modo Duplas (2x2):</strong> O sistema organiza automaticamente as duplas assim que 4 jogadores entram. O 1º jogador faz dupla com o 3º, e o 2º com o 4º.
+            </div>
+        </div>
+
+        <div class="passo">
+            <div class="numero">3</div>
+            <div class="texto-passo">
+                <strong>O Objetivo:</strong> Vence a dupla ou o jogador que conseguir colocar todas as suas 7 peças na mesa primeiro.
+            </div>
+        </div>
+
+        <h2>Regras de Lógica</h2>
+
+        <div class="passo">
+            <div class="numero">4</div>
+            <div class="texto-passo">
+                <strong>Encaixe:</strong> Você só pode jogar uma peça se um dos números dela for igual ao número de uma das pontas da mesa. Se a peça encaixar nas duas pontas, o sistema perguntará qual lado você prefere.
+            </div>
+        </div>
+
+        <div class="passo">
+            <div class="numero">5</div>
+            <div class="texto-passo">
+                <strong>Comprar e Passar:</strong> Se não tiver nenhuma peça que sirva, você deve <strong>Comprar</strong> do monte. Se o monte acabar e você ainda não tiver jogada, clique em <strong>Passar Vez</strong>.
+            </div>
+        </div>
+
+        <div class="alerta">
+            <strong>Dica Pedagógica:</strong> Use o botão "Esconder Peças" quando não for a sua vez. Isso evita que outros alunos vejam a sua estratégia e estimula o raciocínio sobre as peças que ainda faltam sair!
+        </div>
+
+        <center>
+            <a href="index.html" class="btn-voltar">ENTENDI, VAMOS JOGAR!</a>
+        </center>
+    </div>
+</main>
+
+<footer>
+    <p>Laboratório de Computação — © Todos os Direitos Reservados</p>
+</footer>
+
+</body>
+</html>
