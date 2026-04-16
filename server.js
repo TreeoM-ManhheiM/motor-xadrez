@@ -11,12 +11,10 @@ const io = new Server(server, {
     cors: { origin: "*" }
 });
 
-// Configuração do relógio (em segundos)
 const TEMPO_INICIAL = 600; // 10 minutos
 
 let salas = {};
 
-// Função para iniciar o relógio de uma sala
 function iniciarRelogio(salaId) {
     const sala = salas[salaId];
     if (!sala || sala.intervaloRelogio) return;
@@ -26,7 +24,7 @@ function iniciarRelogio(salaId) {
             return;
         }
 
-        const turno = sala.jogo.turn(); // 'w' ou 'b'
+        const turno = sala.jogo.turn();
         const jogadorAtual = sala.jogadores.find(j => j.cor === turno);
         if (!jogadorAtual) return;
 
@@ -93,6 +91,7 @@ io.on('connection', (socket) => {
                 tempo: novoTempo
             });
             socket.emit('definirPapel', { papel: 'jogador', cor: cor });
+            console.log(`[Sala ${nomeSala}] Jogador ${apelido} (${cor}) entrou.`);
         } else {
             sala.espectadores.push({ id: socket.id, nome: apelido });
             socket.emit('definirPapel', { papel: 'espectador' });
@@ -105,6 +104,7 @@ io.on('connection', (socket) => {
                 },
                 rodando: sala.rodando
             });
+            console.log(`[Sala ${nomeSala}] Espectador ${apelido} entrou.`);
         }
 
         io.to(nomeSala).emit('estadoLobby', {
@@ -169,6 +169,7 @@ io.on('connection', (socket) => {
                 })),
                 espectadores: sala.espectadores.map(e => e.nome)
             });
+            console.log(`[Sala ${nomeSala}] Partida iniciada!`);
         }
     });
 
@@ -230,6 +231,7 @@ io.on('connection', (socket) => {
                     vencedor: vencedor,
                     mensagem: vencedor ? `${vencedor === 'w' ? 'Brancas' : 'Pretas'} vencem por xeque-mate!` : 'Empate!'
                 });
+                console.log(`[Sala ${nomeSala}] Fim de jogo: ${motivo}`);
             }
 
         } catch (e) {
@@ -268,6 +270,7 @@ io.on('connection', (socket) => {
             vencedor: vencedor,
             mensagem: `${jogador.nome} desistiu. ${vencedor === 'w' ? 'Brancas' : 'Pretas'} vencem.`
         });
+        console.log(`[Sala ${nomeSala}] ${jogador.nome} desistiu.`);
     });
 
     socket.on('oferecerEmpate', () => {
@@ -288,7 +291,13 @@ io.on('connection', (socket) => {
 
         sala.ofertasEmpate[socket.id] = true;
 
-        io.to(adversario.id).emit('propostaEmpate', { de: jogador.nome, deId: socket.id });
+        // Envia para a sala inteira, mas com o ID do destinatário para filtro no cliente
+        io.to(nomeSala).emit('propostaEmpate', {
+            de: jogador.nome,
+            deId: socket.id,
+            para: adversario.id  // importante: cliente verificará se é para ele
+        });
+        console.log(`[Sala ${nomeSala}] ${jogador.nome} ofereceu empate para ${adversario.nome} (${adversario.id})`);
     });
 
     socket.on('responderEmpate', (resposta) => {
@@ -307,10 +316,12 @@ io.on('connection', (socket) => {
                 vencedor: null,
                 mensagem: 'Empate aceito! Partida finalizada.'
             });
+            console.log(`[Sala ${nomeSala}] Empate aceito.`);
         } else {
             const ofertante = sala.jogadores.find(j => j.nome === resposta.de);
             if (ofertante) {
                 io.to(ofertante.id).emit('empateRecusado', { por: socket.apelido });
+                console.log(`[Sala ${nomeSala}] Empate recusado por ${socket.apelido}.`);
             }
         }
     });
@@ -320,6 +331,7 @@ io.on('connection', (socket) => {
         if (!nomeSala || !salas[nomeSala]) return;
 
         const sala = salas[nomeSala];
+        console.log(`[Sala ${nomeSala}] ${socket.apelido || socket.id} desconectou.`);
 
         const jogadorIndex = sala.jogadores.findIndex(j => j.id === socket.id);
         if (jogadorIndex !== -1) {
@@ -346,6 +358,7 @@ io.on('connection', (socket) => {
         if (sala.jogadores.length === 0 && sala.espectadores.length === 0) {
             clearInterval(sala.intervaloRelogio);
             delete salas[nomeSala];
+            console.log(`[Sala ${nomeSala}] Sala removida.`);
         } else {
             io.to(nomeSala).emit('estadoLobby', {
                 rodando: sala.rodando,
