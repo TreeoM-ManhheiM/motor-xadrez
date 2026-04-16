@@ -2,7 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const { Chess } = require('chess.js'); // agora também no servidor!
+const { Chess } = require('chess.js');
 
 const app = express();
 app.use(cors());
@@ -30,21 +30,19 @@ function iniciarRelogio(salaId) {
         const jogadorAtual = sala.jogadores.find(j => j.cor === turno);
         if (!jogadorAtual) return;
 
-        // Decrementa o tempo do jogador da vez
         jogadorAtual.tempo -= 1;
 
-        // Envia atualização de tempo para todos na sala
         io.to(salaId).emit('atualizarTempo', {
             w: sala.jogadores.find(j => j.cor === 'w')?.tempo,
             b: sala.jogadores.find(j => j.cor === 'b')?.tempo
         });
 
-        // Verifica se o tempo acabou
         if (jogadorAtual.tempo <= 0) {
             jogadorAtual.tempo = 0;
             clearInterval(sala.intervaloRelogio);
             sala.intervaloRelogio = null;
             sala.rodando = false;
+            sala.ofertasEmpate = {};
 
             const vencedor = turno === 'w' ? 'b' : 'w';
             io.to(salaId).emit('fimDeJogo', {
@@ -71,22 +69,20 @@ io.on('connection', (socket) => {
                 rodando: false,
                 jogo: new Chess(),
                 historico: [],
-                intervaloRelogio: null
+                intervaloRelogio: null,
+                ofertasEmpate: {}
             };
         }
 
         const sala = salas[nomeSala];
 
-        // Verifica se já existe jogador com mesmo socket.id (reconexão)
         const jogadorExistente = sala.jogadores.find(j => j.id === socket.id);
         if (jogadorExistente) {
             socket.emit('erro', 'Você já está nesta sala!');
             return;
         }
 
-        // Decide se é jogador ou espectador
         if (sala.jogadores.length < 2) {
-            // Adiciona como jogador
             const cor = sala.jogadores.length === 0 ? 'w' : 'b';
             const novoTempo = TEMPO_INICIAL;
             sala.jogadores.push({
@@ -98,10 +94,8 @@ io.on('connection', (socket) => {
             });
             socket.emit('definirPapel', { papel: 'jogador', cor: cor });
         } else {
-            // Adiciona como espectador
             sala.espectadores.push({ id: socket.id, nome: apelido });
             socket.emit('definirPapel', { papel: 'espectador' });
-            // Envia o estado atual do jogo para o espectador
             socket.emit('estadoAtual', {
                 fen: sala.jogo.fen(),
                 historico: sala.historico,
@@ -113,7 +107,6 @@ io.on('connection', (socket) => {
             });
         }
 
-        // Atualiza lobby para todos
         io.to(nomeSala).emit('estadoLobby', {
             rodando: sala.rodando,
             jogadoresInfo: sala.jogadores.map(j => ({
@@ -124,11 +117,9 @@ io.on('connection', (socket) => {
             espectadores: sala.espectadores.map(e => e.nome)
         });
 
-        // Se for espectador e jogo já estiver rodando, envia tabuleiro
         if (sala.rodando) {
             const jogador = sala.jogadores.find(j => j.id === socket.id);
             if (!jogador) {
-                // espectador
                 socket.emit('iniciarPartida', { cor: 'espectador', fen: sala.jogo.fen() });
             }
         }
@@ -153,21 +144,18 @@ io.on('connection', (socket) => {
             espectadores: sala.espectadores.map(e => e.nome)
         });
 
-        // Verifica se os dois estão prontos para iniciar
         const todosProntos = sala.jogadores.length === 2 && sala.jogadores.every(j => j.pronto);
         if (todosProntos && !sala.rodando) {
             sala.rodando = true;
             sala.jogo.reset();
             sala.historico = [];
+            sala.ofertasEmpate = {};
             
-            // Inicia relógio
             iniciarRelogio(nomeSala);
 
-            // Notifica cada jogador com sua cor
             sala.jogadores.forEach(jog => {
                 io.to(jog.id).emit('iniciarPartida', { cor: jog.cor, fen: sala.jogo.fen() });
             });
-            // Notifica espectadores
             sala.espectadores.forEach(esp => {
                 io.to(esp.id).emit('iniciarPartida', { cor: 'espectador', fen: sala.jogo.fen() });
             });
@@ -195,13 +183,11 @@ io.on('connection', (socket) => {
             return;
         }
 
-        // Verifica se é a vez do jogador
         if (sala.jogo.turn() !== jogador.cor) {
             socket.emit('erro', 'Não é sua vez de jogar.');
             return;
         }
 
-        // Tenta executar o movimento
         try {
             const movimento = sala.jogo.move({ from, to, promotion: promotion || 'q' });
             if (!movimento) {
@@ -209,22 +195,20 @@ io.on('connection', (socket) => {
                 return;
             }
 
-            // Adiciona ao histórico (notação algébrica)
             const lance = movimento.san;
             sala.historico.push(lance);
 
-            // Envia o novo FEN para todos na sala
             io.to(nomeSala).emit('jogadaFeita', {
                 fen: sala.jogo.fen(),
                 historico: sala.historico,
                 lance: lance
             });
 
-            // Verifica fim de jogo
             if (sala.jogo.game_over()) {
                 sala.rodando = false;
                 clearInterval(sala.intervaloRelogio);
                 sala.intervaloRelogio = null;
+                sala.ofertasEmpate = {};
 
                 let motivo = '';
                 let vencedor = null;
@@ -253,7 +237,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Chat
     socket.on('enviarMensagem', (mensagem) => {
         const nomeSala = socket.sala;
         if (!nomeSala) return;
@@ -266,7 +249,6 @@ io.on('connection', (socket) => {
         });
     });
 
-    // Desistir
     socket.on('desistir', () => {
         const nomeSala = socket.sala;
         const sala = salas[nomeSala];
@@ -278,6 +260,7 @@ io.on('connection', (socket) => {
         sala.rodando = false;
         clearInterval(sala.intervaloRelogio);
         sala.intervaloRelogio = null;
+        sala.ofertasEmpate = {};
 
         const vencedor = jogador.cor === 'w' ? 'b' : 'w';
         io.to(nomeSala).emit('fimDeJogo', {
@@ -287,7 +270,6 @@ io.on('connection', (socket) => {
         });
     });
 
-    // Oferecer empate
     socket.on('oferecerEmpate', () => {
         const nomeSala = socket.sala;
         const sala = salas[nomeSala];
@@ -296,12 +278,17 @@ io.on('connection', (socket) => {
         const jogador = sala.jogadores.find(j => j.id === socket.id);
         if (!jogador) return;
 
-        // Encontra o adversário
+        if (sala.ofertasEmpate[socket.id]) {
+            socket.emit('erro', 'Você já ofereceu empate nesta partida.');
+            return;
+        }
+
         const adversario = sala.jogadores.find(j => j.id !== socket.id);
         if (!adversario) return;
 
-        // Notifica o adversário
-        io.to(adversario.id).emit('propostaEmpate', { de: jogador.nome });
+        sala.ofertasEmpate[socket.id] = true;
+
+        io.to(adversario.id).emit('propostaEmpate', { de: jogador.nome, deId: socket.id });
     });
 
     socket.on('responderEmpate', (resposta) => {
@@ -313,6 +300,7 @@ io.on('connection', (socket) => {
             sala.rodando = false;
             clearInterval(sala.intervaloRelogio);
             sala.intervaloRelogio = null;
+            sala.ofertasEmpate = {};
 
             io.to(nomeSala).emit('fimDeJogo', {
                 motivo: 'empate_aceito',
@@ -320,7 +308,6 @@ io.on('connection', (socket) => {
                 mensagem: 'Empate aceito! Partida finalizada.'
             });
         } else {
-            // Recusou
             const ofertante = sala.jogadores.find(j => j.nome === resposta.de);
             if (ofertante) {
                 io.to(ofertante.id).emit('empateRecusado', { por: socket.apelido });
@@ -334,16 +321,15 @@ io.on('connection', (socket) => {
 
         const sala = salas[nomeSala];
 
-        // Remove dos jogadores
         const jogadorIndex = sala.jogadores.findIndex(j => j.id === socket.id);
         if (jogadorIndex !== -1) {
             sala.jogadores.splice(jogadorIndex, 1);
             
             if (sala.rodando) {
-                // Se um jogador sai durante a partida, o outro vence
                 sala.rodando = false;
                 clearInterval(sala.intervaloRelogio);
                 sala.intervaloRelogio = null;
+                sala.ofertasEmpate = {};
                 const vencedor = sala.jogadores[0]?.cor;
                 if (vencedor) {
                     io.to(nomeSala).emit('fimDeJogo', {
@@ -354,16 +340,13 @@ io.on('connection', (socket) => {
                 }
             }
         } else {
-            // Remove dos espectadores
             sala.espectadores = sala.espectadores.filter(e => e.id !== socket.id);
         }
 
-        // Se não houver mais ninguém, deleta a sala
         if (sala.jogadores.length === 0 && sala.espectadores.length === 0) {
             clearInterval(sala.intervaloRelogio);
             delete salas[nomeSala];
         } else {
-            // Atualiza lobby
             io.to(nomeSala).emit('estadoLobby', {
                 rodando: sala.rodando,
                 jogadoresInfo: sala.jogadores.map(j => ({
