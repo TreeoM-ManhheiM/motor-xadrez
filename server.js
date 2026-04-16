@@ -291,11 +291,10 @@ io.on('connection', (socket) => {
 
         sala.ofertasEmpate[socket.id] = true;
 
-        // Envia para a sala inteira, mas com o ID do destinatário para filtro no cliente
         io.to(nomeSala).emit('propostaEmpate', {
             de: jogador.nome,
             deId: socket.id,
-            para: adversario.id  // importante: cliente verificará se é para ele
+            para: adversario.id
         });
         console.log(`[Sala ${nomeSala}] ${jogador.nome} ofereceu empate para ${adversario.nome} (${adversario.id})`);
     });
