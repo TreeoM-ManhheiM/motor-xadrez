@@ -15,6 +15,26 @@ const TEMPO_INICIAL = 600; // 10 minutos
 
 let salas = {};
 
+// Função para resetar completamente a sala para o estado de lobby (pronto para nova partida)
+function resetarSalaParaLobby(sala) {
+    sala.rodando = false;
+    sala.jogo.reset();
+    sala.historico = [];
+    sala.ofertasEmpate = {};
+    
+    // Resetar tempos e status de pronto de todos os jogadores
+    sala.jogadores.forEach(jogador => {
+        jogador.tempo = TEMPO_INICIAL;
+        jogador.pronto = false;
+    });
+
+    // Parar o relógio se estiver rodando
+    if (sala.intervaloRelogio) {
+        clearInterval(sala.intervaloRelogio);
+        sala.intervaloRelogio = null;
+    }
+}
+
 function iniciarRelogio(salaId) {
     const sala = salas[salaId];
     if (!sala || sala.intervaloRelogio) return;
@@ -37,16 +57,26 @@ function iniciarRelogio(salaId) {
 
         if (jogadorAtual.tempo <= 0) {
             jogadorAtual.tempo = 0;
-            clearInterval(sala.intervaloRelogio);
-            sala.intervaloRelogio = null;
-            sala.rodando = false;
-            sala.ofertasEmpate = {};
-
             const vencedor = turno === 'w' ? 'b' : 'w';
+            
+            // Reseta a sala e notifica fim de jogo
+            resetarSalaParaLobby(sala);
+            
             io.to(salaId).emit('fimDeJogo', {
                 motivo: 'tempo',
                 vencedor: vencedor,
                 mensagem: `Tempo esgotado! ${vencedor === 'w' ? 'Brancas' : 'Pretas'} vencem.`
+            });
+            
+            // Atualiza o lobby para todos
+            io.to(salaId).emit('estadoLobby', {
+                rodando: sala.rodando,
+                jogadoresInfo: sala.jogadores.map(j => ({
+                    nome: j.nome,
+                    pronto: j.pronto,
+                    cor: j.cor
+                })),
+                espectadores: sala.espectadores.map(e => e.nome)
             });
         }
     }, 1000);
@@ -206,11 +236,6 @@ io.on('connection', (socket) => {
             });
 
             if (sala.jogo.game_over()) {
-                sala.rodando = false;
-                clearInterval(sala.intervaloRelogio);
-                sala.intervaloRelogio = null;
-                sala.ofertasEmpate = {};
-
                 let motivo = '';
                 let vencedor = null;
                 if (sala.jogo.in_checkmate()) {
@@ -226,10 +251,23 @@ io.on('connection', (socket) => {
                     motivo = 'material insuficiente';
                 }
 
+                // Reseta a sala e notifica fim de jogo
+                resetarSalaParaLobby(sala);
+
                 io.to(nomeSala).emit('fimDeJogo', {
                     motivo: motivo,
                     vencedor: vencedor,
                     mensagem: vencedor ? `${vencedor === 'w' ? 'Brancas' : 'Pretas'} vencem por xeque-mate!` : 'Empate!'
+                });
+
+                io.to(nomeSala).emit('estadoLobby', {
+                    rodando: sala.rodando,
+                    jogadoresInfo: sala.jogadores.map(j => ({
+                        nome: j.nome,
+                        pronto: j.pronto,
+                        cor: j.cor
+                    })),
+                    espectadores: sala.espectadores.map(e => e.nome)
                 });
                 console.log(`[Sala ${nomeSala}] Fim de jogo: ${motivo}`);
             }
@@ -259,16 +297,25 @@ io.on('connection', (socket) => {
         const jogador = sala.jogadores.find(j => j.id === socket.id);
         if (!jogador) return;
 
-        sala.rodando = false;
-        clearInterval(sala.intervaloRelogio);
-        sala.intervaloRelogio = null;
-        sala.ofertasEmpate = {};
-
         const vencedor = jogador.cor === 'w' ? 'b' : 'w';
+        
+        // Reseta a sala e notifica fim de jogo
+        resetarSalaParaLobby(sala);
+
         io.to(nomeSala).emit('fimDeJogo', {
             motivo: 'desistencia',
             vencedor: vencedor,
             mensagem: `${jogador.nome} desistiu. ${vencedor === 'w' ? 'Brancas' : 'Pretas'} vencem.`
+        });
+
+        io.to(nomeSala).emit('estadoLobby', {
+            rodando: sala.rodando,
+            jogadoresInfo: sala.jogadores.map(j => ({
+                nome: j.nome,
+                pronto: j.pronto,
+                cor: j.cor
+            })),
+            espectadores: sala.espectadores.map(e => e.nome)
         });
         console.log(`[Sala ${nomeSala}] ${jogador.nome} desistiu.`);
     });
@@ -305,15 +352,23 @@ io.on('connection', (socket) => {
         if (!sala || !sala.rodando) return;
 
         if (resposta.aceito) {
-            sala.rodando = false;
-            clearInterval(sala.intervaloRelogio);
-            sala.intervaloRelogio = null;
-            sala.ofertasEmpate = {};
+            // Reseta a sala e notifica fim de jogo
+            resetarSalaParaLobby(sala);
 
             io.to(nomeSala).emit('fimDeJogo', {
                 motivo: 'empate_aceito',
                 vencedor: null,
                 mensagem: 'Empate aceito! Partida finalizada.'
+            });
+
+            io.to(nomeSala).emit('estadoLobby', {
+                rodando: sala.rodando,
+                jogadoresInfo: sala.jogadores.map(j => ({
+                    nome: j.nome,
+                    pronto: j.pronto,
+                    cor: j.cor
+                })),
+                espectadores: sala.espectadores.map(e => e.nome)
             });
             console.log(`[Sala ${nomeSala}] Empate aceito.`);
         } else {
@@ -337,11 +392,10 @@ io.on('connection', (socket) => {
             sala.jogadores.splice(jogadorIndex, 1);
             
             if (sala.rodando) {
-                sala.rodando = false;
-                clearInterval(sala.intervaloRelogio);
-                sala.intervaloRelogio = null;
-                sala.ofertasEmpate = {};
                 const vencedor = sala.jogadores[0]?.cor;
+                // Reseta a sala e notifica fim de jogo
+                resetarSalaParaLobby(sala);
+                
                 if (vencedor) {
                     io.to(nomeSala).emit('fimDeJogo', {
                         motivo: 'desconexao',
@@ -349,13 +403,22 @@ io.on('connection', (socket) => {
                         mensagem: 'Oponente desconectou. Você vence!'
                     });
                 }
+                io.to(nomeSala).emit('estadoLobby', {
+                    rodando: sala.rodando,
+                    jogadoresInfo: sala.jogadores.map(j => ({
+                        nome: j.nome,
+                        pronto: j.pronto,
+                        cor: j.cor
+                    })),
+                    espectadores: sala.espectadores.map(e => e.nome)
+                });
             }
         } else {
             sala.espectadores = sala.espectadores.filter(e => e.id !== socket.id);
         }
 
         if (sala.jogadores.length === 0 && sala.espectadores.length === 0) {
-            clearInterval(sala.intervaloRelogio);
+            if (sala.intervaloRelogio) clearInterval(sala.intervaloRelogio);
             delete salas[nomeSala];
             console.log(`[Sala ${nomeSala}] Sala removida.`);
         } else {
